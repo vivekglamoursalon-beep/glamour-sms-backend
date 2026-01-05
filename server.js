@@ -1,53 +1,30 @@
-import express from "express";
-import twilio from "twilio";
-import cors from "cors";
-import dotenv from "dotenv";
+app.post('/send-sms', async (req, res) => {
+  try {
+    const { name, service, date, time, phone } = req.body;
 
-dotenv.config();
+    console.log("📩 Incoming request:", req.body);
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+    if (!phone) {
+      return res.status(400).json({ error: "Phone number missing" });
+    }
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
-app.post("/send-sms", async (req, res) => {
-  // ✅ MATCH FRONTEND FIELD NAMES
-  const { name, phone, service, date, time } = req.body;
-
-  const msg =
-`New Booking
+    const message = `
+New Booking
 Name: ${name}
 Service: ${service}
 Date: ${date}
-Time: ${time}`;
+Time: ${time}
+`;
 
-  try {
-    // Owner SMS
     await client.messages.create({
-      body: msg,
-      from: process.env.TWILIO_PHONE,
-      to: process.env.OWNER_PHONE
-    });
-
-    // Customer SMS
-    await client.messages.create({
-      body: msg,
-      from: process.env.TWILIO_PHONE,
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
       to: phone
     });
 
     res.json({ success: true });
   } catch (error) {
-    console.error("SMS error:", error);
-    res.status(500).json({ success: false });
+    console.error("❌ SMS error:", error.message);
+    res.status(500).json({ error: "SMS failed" });
   }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("SMS server running on port", PORT);
 });
