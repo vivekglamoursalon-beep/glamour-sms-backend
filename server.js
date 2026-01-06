@@ -1,57 +1,73 @@
 import express from "express";
 import cors from "cors";
+import bodyParser from "body-parser";
 import twilio from "twilio";
-import dotenv from "dotenv";
 
-dotenv.config();
+const app = express();
 
-const app = express(); // ✅ THIS WAS MISSING
+/* ---------- MIDDLEWARE ---------- */
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// ✅ Health check
-app.get("/", (req, res) => {
-  res.send("Glamour SMS backend running ✅");
-});
+/* ---------- ENV ---------- */
+const PORT = process.env.PORT || 10000;
 
-// ✅ Twilio client
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const {
+  TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN,
+  TWILIO_PHONE_NUMBER,
+  OWNER_PHONE
+} = process.env;
 
-// ✅ SEND SMS ROUTE
+/* ---------- TWILIO CLIENT ---------- */
+const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+/* ---------- ROUTE ---------- */
 app.post("/send-sms", async (req, res) => {
   try {
-    console.log("📩 Incoming SMS payload:", req.body);
+    const {
+      customer_name,
+      customer_phone,
+      service,
+      date,
+      time
+    } = req.body;
 
-    const { to, message } = req.body;
-
-    // ✅ validation
-    if (!to || !message) {
-      return res.status(400).json({
-        success: false,
-        error: "`to` or `message` missing",
-      });
+    if (!customer_phone || !customer_name) {
+      return res.status(400).json({ error: "Missing customer data" });
     }
 
-    const sms = await client.messages.create({
-      body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: to, // ✅ REQUIRED
+    const messageBody = `
+New Booking
+Name: ${customer_name}
+Service: ${service}
+Date: ${date}
+Time: ${time}
+`;
+
+    // 🔹 SMS to OWNER
+    await client.messages.create({
+      from: TWILIO_PHONE_NUMBER,
+      to: OWNER_PHONE, // +919766002781
+      body: messageBody
     });
 
-    console.log("✅ SMS sent:", sms.sid);
+    // 🔹 SMS to CUSTOMER
+    await client.messages.create({
+      from: TWILIO_PHONE_NUMBER,
+      to: `+91${customer_phone}`,
+      body: messageBody
+    });
 
-    res.json({ success: true, sid: sms.sid });
-  } catch (error) {
-    console.error("❌ SMS error:", error.message);
-    res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, message: "SMS sent to owner & customer" });
+
+  } catch (err) {
+    console.error("SMS ERROR:", err);
+    res.status(500).json({ error: "SMS failed" });
   }
 });
 
-// ✅ REQUIRED FOR RENDER
-const PORT = process.env.PORT || 10000;
+/* ---------- START ---------- */
 app.listen(PORT, () => {
-  console.log(`🚀 SMS server running on port ${PORT}`);
+  console.log(`✅ SMS server running on port ${PORT}`);
 });
